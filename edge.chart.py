@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 # Description: Edge log netdata python.d module
 
-
-from base import SimpleService
 import json
+from base import SimpleService
 try:
     import urllib.request as urllib2
 except ImportError:
@@ -72,7 +71,6 @@ class Service(SimpleService):
     def __init__(self, configuration=None, name=None):
         SimpleService.__init__(self, configuration=configuration, name=name)
         self.couch_url = configuration['couch_url']
-        self.couch_url_args = '/_changes?descending=true&limit=20&include_docs=true'
         self.resource = configuration['resource']
         if len(self.couch_url) == 0:
             raise Exception('Invalid couch_url')
@@ -96,25 +94,20 @@ class Service(SimpleService):
             'not_actual_docs_count': 0,
             'timeshift': 0
         }
-        self.seq = 0
-        self.repeat_seq_count = 0
+        self.last_time = ''
 
     def _get_data(self):
         for key in self.data.keys():
             self.data[key] = 0
         try:
-            response = urllib2.urlopen(self.couch_url +
-                                       self.couch_url_args).read()
-            docs = json.loads(response)['results']
-            for d in reversed(docs):
-                if d['doc']['resource'] == self.resource \
-                        and d['seq'] > self.seq:
-                    self.seq = d['seq']
-                    doc = d['doc']
-                    for key in self.data.keys():
-                        self.data[key] = doc.get(key, 0)
-                    break
-        except (Exception, error) as e:
-            logger.info('Error while loading log data: {}'.format(e.message))
+            response = urllib2.urlopen(self.couch_url + '/' +
+                                       self.resource).read()
+            doc = json.loads(response)
+            if doc['time'] == self.last_time:
+                return self.data
+            self.last_time = doc['time']
+            for key in self.data.keys():
+                self.data[key] = doc.get(key, 0)
+        except (Exception, error):
             return self.data
         return self.data

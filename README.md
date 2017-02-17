@@ -1,5 +1,13 @@
 # openprocurement.edge-netdata-plugin
-=====================================
+
+Plugin visualize edge activity
+
+### Requirements
+* openprocurement.edge v1.0.0.dev5
+* openprocurement_client v2.0b5
+
+## How to use
+
 Put file to `/usr/libexec/netdata/python.d/`
 
 ### Configuration example

@@ -19,9 +19,14 @@ update_every = 10
 ORDER = [
     'queues',
     'workers',
+    'clients',
+    'requests',
     'problem_docs',
     'process_documents',
-    'timeshift'
+    'timeshift',
+    'sync_queue',
+    'sync_last_response',
+    'sync_get_items'
 ]
 CHARTS = {
     'process_documents': {
@@ -58,10 +63,44 @@ CHARTS = {
             ['retry_resource_items_queue_size', 'retry queue', 'absolute', 1, 1]
         ]
     },
+    'clients': {
+        'options': [None, 'Clients', 'clients', 'Clients', '', 'line'],
+        'lines': [['api_clients_count', 'clients', 'absolute', 1, 1]]
+    },
+    'requests': {
+        'options': [None, 'Request durations', 'miliseconds', 'Request durations', '', 'area'],
+        'lines': [
+            ['max_avg_request_duration', 'max avg.', 'absolute', 1, 1],
+            ['avg_request_duration', 'avg.', 'absolute', 1, 1],
+            ['request_dev', 'avg. + stdev', 'absolute', 1, 1],
+            ['min_avg_request_duration', 'min avg.', 'absolute', 1, 1]
+        ]
+    },
     'timeshift': {
         'options': [None, 'Delay', 'seconds', 'Time delay', '', 'line'],
         'lines': [
             ['timeshift', 'delay', 'absolute', 1, 1]
+        ]
+    },
+    'sync_queue': {
+        'options': [None, 'Sync Queue', 'items', 'Sync queue size', '', 'line'],
+        'lines': [
+            ['sync_queue', 'size', 'absolute', 1, 1]
+        ]
+    },
+    'sync_last_response': {
+        'options': [None, 'Sync last response', 'seconds', 'Sync last response', '', 'line'],
+        'lines': [
+            ['sync_forward_last_response', 'forward', 'absolute', 1, 1],
+            ['sync_backward_last_response', 'backward', 'absolute', 1, 1]
+        ]
+    },
+    'sync_get_items': {
+        'options': [None, 'Sync response items count', 'items', 'Sync response items count', '',
+                    'line'],
+        'lines': [
+            ['sync_forward_response_len', 'forward', 'absolute', 1, 1],
+            ['sync_backward_response_len', 'backward', 'absolute', 1, 1]
         ]
     }
 }
@@ -92,9 +131,20 @@ class Service(SimpleService):
             'add_to_retry': 0,
             'retry_workers_count': 0,
             'not_actual_docs_count': 0,
-            'timeshift': 0
+            'timeshift': 0,
+            'sync_queue': 0,
+            'sync_forward_response_len': 0,
+            'sync_backward_response_len': 0,
+            'sync_forward_last_response': 0,
+            'sync_backward_last_response': 0,
+            'avg_request_duration': 0,
+            'request_dev': 0,
+            'api_clients_count': 0,
+            'min_avg_request_duration': 0,
+            'max_avg_request_duration': 0
         }
         self.last_time = ''
+        self.same_data_count = 0
 
     def _get_data(self):
         for key in self.data.keys():
@@ -103,9 +153,13 @@ class Service(SimpleService):
             response = urllib2.urlopen(self.couch_url + '/' +
                                        self.resource).read()
             doc = json.loads(response)
-            if doc['time'] == self.last_time:
+            if doc['time'] == self.last_time and self.same_data_count > 3:
                 return self.data
-            self.last_time = doc['time']
+            if doc['time'] == self.last_time:
+                self.same_data_count += 1
+            else:
+                self.same_data_count = 0
+                self.last_time = doc['time']
             for key in self.data.keys():
                 self.data[key] = doc.get(key, 0)
         except (Exception, error):

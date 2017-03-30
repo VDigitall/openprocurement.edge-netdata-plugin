@@ -1,13 +1,8 @@
 # -*- coding: utf-8 -*-
 # Description: Edge log netdata python.d module
 
-import json
+from kadabra import Kadabra
 from base import SimpleService
-try:
-    import urllib.request as urllib2
-except ImportError:
-    import urllib2
-from socket import error
 from logging import getLogger
 
 logger = getLogger(__name__)
@@ -23,10 +18,7 @@ ORDER = [
     'requests',
     'problem_docs',
     'process_documents',
-    'timeshift',
-    'sync_queue',
-    'sync_last_response',
-    'sync_get_items'
+    'timeshift'
 ]
 CHARTS = {
     'process_documents': {
@@ -81,27 +73,6 @@ CHARTS = {
         'lines': [
             ['timeshift', 'delay', 'absolute', 1, 1]
         ]
-    },
-    'sync_queue': {
-        'options': [None, 'Sync Queue', 'items', 'Sync queue size', '', 'line'],
-        'lines': [
-            ['sync_queue', 'size', 'absolute', 1, 1]
-        ]
-    },
-    'sync_last_response': {
-        'options': [None, 'Sync last response', 'seconds', 'Sync last response', '', 'line'],
-        'lines': [
-            ['sync_forward_last_response', 'forward', 'absolute', 1, 1],
-            ['sync_backward_last_response', 'backward', 'absolute', 1, 1]
-        ]
-    },
-    'sync_get_items': {
-        'options': [None, 'Sync response items count', 'items', 'Sync response items count', '',
-                    'line'],
-        'lines': [
-            ['sync_forward_response_len', 'forward', 'absolute', 1, 1],
-            ['sync_backward_response_len', 'backward', 'absolute', 1, 1]
-        ]
     }
 }
 
@@ -109,10 +80,18 @@ CHARTS = {
 class Service(SimpleService):
     def __init__(self, configuration=None, name=None):
         SimpleService.__init__(self, configuration=configuration, name=name)
-        self.couch_url = configuration['couch_url']
-        self.resource = configuration['resource']
-        if len(self.couch_url) == 0:
-            raise Exception('Invalid couch_url')
+        self.metrics_key = configuration.get('metrics_key', None)
+        self.resource = configuration.get('resource', None)
+        if self.metrics_key is None or self.resource is None:
+            raise Exception('Missed configuration.')
+        kadabra_args = {
+            'CLIENT_CHANNEL_ARGS': {
+                'rewrite_metrics': True,
+                'queue_key': '{}_{}_metrics'.format(self.metrics_key,
+                                                    self.resource)
+            }
+        }
+        self.kadabra_client = Kadabra(kadabra_args)
         self.order = ORDER
         self.definitions = CHARTS
         self.data = {
@@ -120,7 +99,7 @@ class Service(SimpleService):
             'update_documents': 0,
             'workers_count': 0,
             'resource_items_queue_size': 0,
-            'free_api_clients': 0,
+            'api_clients_count': 0,
             'exceptions_count': 0,
             'add_to_resource_items_queue': 0,
             'skiped': 0,
@@ -132,11 +111,6 @@ class Service(SimpleService):
             'retry_workers_count': 0,
             'not_actual_docs_count': 0,
             'timeshift': 0,
-            'sync_queue': 0,
-            'sync_forward_response_len': 0,
-            'sync_backward_response_len': 0,
-            'sync_forward_last_response': 0,
-            'sync_backward_last_response': 0,
             'avg_request_duration': 0,
             'request_dev': 0,
             'api_clients_count': 0,
@@ -150,18 +124,25 @@ class Service(SimpleService):
         for key in self.data.keys():
             self.data[key] = 0
         try:
-            response = urllib2.urlopen(self.couch_url + '/' +
-                                       self.resource).read()
-            doc = json.loads(response)
-            if doc['time'] == self.last_time and self.same_data_count > 3:
-                return self.data
-            if doc['time'] == self.last_time:
+            metrics = self.kadabra_client.channel.receive()
+        except:
+            metrics = None
+        if metrics:
+            metrics = metrics.serialize()
+            if self.last_time == metrics['serialized_at']:
                 self.same_data_count += 1
             else:
+                self.last_time = metrics['serialized_at']
                 self.same_data_count = 0
-                self.last_time = doc['time']
-            for key in self.data.keys():
-                self.data[key] = doc.get(key, 0)
-        except (Exception, error):
-            return self.data
+            if self.same_data_count < 3:
+                for k in ['timers', 'counters', 'dimensions']:
+                    for m in metrics[k]:
+                        self.data[m['name']] = m['value']
         return self.data
+
+    def check(self):
+        try:
+            self._get_data()
+        except:
+            return False
+        return True

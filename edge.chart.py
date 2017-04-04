@@ -1,11 +1,8 @@
 # -*- coding: utf-8 -*-
 # Description: Edge log netdata python.d module
 
-from kadabra import Kadabra
 from base import SimpleService
-from logging import getLogger
-
-logger = getLogger(__name__)
+from kadabra import Kadabra
 
 priority = 60000
 retries = 60

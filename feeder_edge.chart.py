@@ -3,14 +3,11 @@
 
 from kadabra import Kadabra
 from base import SimpleService
-from logging import getLogger
 from iso8601 import parse_date
 from datetime import datetime
 from pytz import timezone
 
 TZ = timezone('Europe/Kiev')
-
-logger = getLogger(__name__)
 
 priority = 60000
 retries = 60

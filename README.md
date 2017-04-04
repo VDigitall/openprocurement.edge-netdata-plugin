@@ -2,18 +2,27 @@
 
 Plugin visualize edge activity
 
+### Support
+* openprocurement.edge v1.0.0.dev6
+* openprocurement_client v2.0b7
+
 ### Requirements
-* openprocurement.edge v1.0.0.dev5
-* openprocurement_client v2.0b5
+* kadabra
+* iso8601
+
+### How to install requirements to netdata python modules
+
+`pip install --target /usr/libexec/netdata/python.d/python_modules/ -r requirements.txt`
 
 ## How to use
 
-Put file to `/usr/libexec/netdata/python.d/`
+Put files to `/usr/libexec/netdata/python.d/`
 
 ### Configuration example
-Put entry to file `/etc/netdata/python.d/edge.conf`.
+Put entry to file `/etc/netdata/python.d/edge.conf` and
+                  `/etc/netdata/python.d/feeder_edge.conf`.
 ```
-resource_name:
-  resource: 'resource_name'
-  couch_url: 'http://IP:PORT/logs_db_name'
+job_name:
+  resource: 'tenders'
+  metrics_key: 'edge'
 ```
